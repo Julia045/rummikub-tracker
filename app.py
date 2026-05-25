@@ -1,16 +1,51 @@
 import streamlit as st
+from database import create_tables, save_game_night, get_game_nights, save_player, save_round, save_round_points
 
 st.title("Rummikub Score Tracker")
+create_tables()
 
+st.subheader("Gespeicherte Spielabende")
+
+game_nights = get_game_nights()
+
+for game_night in game_nights:
+    st.write(game_night)
 
 if "game_night" not in st.session_state:
     st.session_state.game_night = {
-        "name": "Rummikub Abend",
+        "id": None,
+        "name": "",
         "players": [],
         "rounds": []
     }
 
-st.text_input("Spielername", key="player_input")
+if "game_night_name_set" not in st.session_state:
+    st.session_state.game_night_name_set = False
+
+
+def save_game_night_name():
+    game_night_id = save_game_night(st.session_state.game_night_name)
+
+    st.session_state.game_night["id"] = game_night_id
+    st.session_state.game_night["name"] = st.session_state.game_night_name
+    st.session_state.game_night_name_set = True
+
+if not st.session_state.game_night_name_set:
+
+    with st.form("game_night_form"):
+        st.text_input(
+            "Name des Spielabends",
+            key="game_night_name"
+        )
+
+        st.form_submit_button(
+            "Spielabend starten", 
+            on_click=save_game_night_name
+        )
+
+else:
+    st.subheader(st.session_state.game_night["name"])
+
 
 
 def add_player():
@@ -21,12 +56,25 @@ def add_player():
             st.warning("Dieser Spieler wurde bereits hinzugefügt.")
         else:
             st.session_state.game_night["players"].append(player_name)
+            save_player(
+                st.session_state.game_night["id"],
+                player_name
+            )
             st.session_state.player_input = ""
     else:
         st.warning("Name fehlt")
 
+with st.form("player_form"):
 
-st.button("Spieler hinzufügen", on_click=add_player)
+    st.text_input(
+        "Spielername",
+        key="player_input"
+    )
+
+    st.form_submit_button(
+        "Spieler hinzufügen",
+        on_click=add_player
+    )
 
 st.subheader("Spieler")
 
@@ -47,6 +95,19 @@ def save_round():
 
         else:
             round_points[player] = st.session_state[f"points_{player}"]
+    
+    round_id = save_round(
+    st.session_state.game_night["id"],
+    winner
+)
+
+    for player, points in round_points.items():
+
+        save_round_points(
+            round_id,
+            player,
+            points
+        )
 
     round_data = {
         "winner": winner,
@@ -85,7 +146,7 @@ if len(st.session_state.game_night["players"]) >= 2:
             )
 
     st.button("Runde speichern", on_click=save_round)
-    
+
 st.subheader("Gespeicherte Runden")
 
 for index, round_data in enumerate(st.session_state.game_night["rounds"], start=1):
@@ -127,3 +188,4 @@ if st.session_state.game_night["rounds"]:
     if total_points:
         winner = min(total_points, key=lambda player: total_points[player])
         st.success(f"Aktueller Gewinner: {winner}")
+
