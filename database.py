@@ -124,3 +124,107 @@ def save_round_points(round_id, player_name, points):
 
     connection.commit()
     connection.close()
+
+def get_game_night_by_id(game_night_id):
+
+    connection = sqlite3.connect("rummikub.db")
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT * FROM game_nights
+        WHERE id = ?
+        """,
+        (game_night_id,)
+    )
+
+    game_night = cursor.fetchone()
+
+    connection.close()
+
+    return game_night
+
+def get_players(game_night_id):
+
+    connection = sqlite3.connect("rummikub.db")
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT name FROM players
+        WHERE game_night_id = ?
+        """,
+        (game_night_id,)
+    )
+
+    players = cursor.fetchall()
+
+    connection.close()
+
+    return players
+
+def get_rounds(game_night_id):
+
+    connection = sqlite3.connect("rummikub.db")
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT id, winner FROM rounds
+        WHERE game_night_id = ?
+        """,
+        (game_night_id,)
+    )
+
+    rounds = cursor.fetchall()
+
+    connection.close()
+
+    return rounds
+
+def get_round_points(round_id):
+
+    connection = sqlite3.connect("rummikub.db")
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT player_name, points
+        FROM round_points
+        WHERE round_id = ?
+        """,
+        (round_id,)
+    )
+
+    round_points = cursor.fetchall()
+
+    connection.close()
+
+    return round_points
+
+def delete_game_night(game_night_id):
+    connection = sqlite3.connect("rummikub.db")
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "DELETE FROM round_points WHERE round_id IN (SELECT id FROM rounds WHERE game_night_id = ?)",
+        (game_night_id,)
+    )
+
+    cursor.execute(
+        "DELETE FROM rounds WHERE game_night_id = ?",
+        (game_night_id,)
+    )
+
+    cursor.execute(
+        "DELETE FROM players WHERE game_night_id = ?",
+        (game_night_id,)
+    )
+
+    cursor.execute(
+        "DELETE FROM game_nights WHERE id = ?",
+        (game_night_id,)
+    )
+
+    connection.commit()
+    connection.close()
