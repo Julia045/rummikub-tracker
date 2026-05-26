@@ -13,6 +13,26 @@ from database import (
     delete_game_night
 )
 
+if "password_correct" not in st.session_state:
+    st.session_state.password_correct = False
+
+
+def check_password():
+    if st.session_state.password == st.secrets["APP_PASSWORD"]:
+        st.session_state.password_correct = True
+    else:
+        st.error("Falsches Passwort")
+
+
+if not st.session_state.password_correct:
+    st.text_input(
+        "Passwort",
+        type="password",
+        key="password",
+        on_change=check_password
+    )
+    st.stop()
+
 st.title("Rummikub Score Tracker")
 create_tables()
 
