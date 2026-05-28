@@ -13,6 +13,9 @@ from database import (
     delete_game_night,
     get_history_data
 )
+@st.cache_data(ttl=30)
+def cached_get_history_data():
+    return get_history_data()
 
 if "password_correct" not in st.session_state:
     st.session_state.password_correct = False
@@ -58,7 +61,7 @@ tab_setup, tab_spiel, tab_wertung, tab_historie = st.tabs([
 ])
 
 with tab_setup:
-    st.subheader("Neuer Spielabend")
+    st.subheader("Neuer Spielabend:")
 
     if not st.session_state.game_night_name_set:
 
@@ -69,6 +72,7 @@ with tab_setup:
         if submitted:
             if game_night_name:
                 game_night_id = save_game_night(game_night_name)
+                st.cache_data.clear()
 
                 st.session_state.game_night = {
                     "id": game_night_id,
@@ -84,39 +88,50 @@ with tab_setup:
 
     else:
         st.subheader(st.session_state.game_night["name"])
+        if st.button("Neuen Spielabend starten"):
+            st.session_state.game_night = {
+                "id": None,
+                "name": "",
+                "players": [],
+                "rounds": []
+            }
+            st.session_state.game_night_name_set = False
+            st.cache_data.clear()
+            st.rerun()
 
-    st.subheader("Spieler")
+        st.subheader("Spieler:")
 
-    def add_player():
-        player_name = st.session_state.player_input
+        def add_player():
+            player_name = st.session_state.player_input
 
-        if player_name:
-            if player_name in st.session_state.game_night["players"]:
-                st.warning("Dieser Spieler wurde bereits hinzugefügt.")
+            if player_name:
+                if player_name in st.session_state.game_night["players"]:
+                    st.warning("Dieser Spieler wurde bereits hinzugefügt.")
+                else:
+                    st.session_state.game_night["players"].append(player_name)
+                    save_player(
+                        st.session_state.game_night["id"],
+                        player_name
+                    )
+                    st.cache_data.clear()
+                    st.session_state.player_input = ""
             else:
-                st.session_state.game_night["players"].append(player_name)
-                save_player(
-                    st.session_state.game_night["id"],
-                    player_name
-                )
-                st.session_state.player_input = ""
-        else:
-            st.warning("Name fehlt")
+                st.warning("Name fehlt")
 
-    with st.form("player_form"):
+        with st.form("player_form"):
 
-        st.text_input(
-            "Spielername",
-            key="player_input"
-        )
+            st.text_input(
+                "Spielername",
+                key="player_input"
+            )
 
-        st.form_submit_button(
-            "Spieler hinzufügen",
-            on_click=add_player
-        )
+            st.form_submit_button(
+                "Spieler hinzufügen",
+                on_click=add_player
+            )
 
-    for player in st.session_state.game_night["players"]:
-        st.write(f"• {player}")
+        for player in st.session_state.game_night["players"]:
+            st.write(f"• {player}")
 
 with tab_spiel:
     st.subheader("Neue Runde")
@@ -147,6 +162,7 @@ with tab_spiel:
                 player,
                 points
             )
+            st.cache_data.clear()
 
         round_data = {
             "winner": winner,
@@ -262,7 +278,7 @@ with tab_historie:
 
     st.subheader("Alte Spielabende")
 
-    history_rows = get_history_data()
+    history_rows = cached_get_history_data()
 
     history = {}
 
@@ -299,15 +315,6 @@ with tab_historie:
 
         for game_night_id, game_night_data in history.items():
 
-            st.markdown(f"### {game_night_data['name']}")
-
-            if st.button(
-                "Spielabend löschen",
-                key=f"delete_history_{game_night_id}"
-            ):
-                delete_game_night(game_night_id)
-                st.rerun()
-
             total_points = {}
             win_counter = {}
 
@@ -330,12 +337,33 @@ with tab_historie:
                 key=lambda item: item[1]
             )
 
-            for place, (player, points) in enumerate(sorted_total_points, start=1):
-                st.write(
-                    f"{place}. {player}: {points} Punkte | Siege: {win_counter[player]}"
-                )
+            with st.expander(game_night_data["name"]):
 
-            st.divider()
+                if st.button(
+                    "Spielabend öffnen",
+                    key=f"open_history_{game_night_id}"
+                ):
+                    st.session_state.game_night = {
+                        "id": game_night_id,
+                        "name": game_night_data["name"],
+                        "players": list(game_night_data["players"]),
+                        "rounds": list(game_night_data["rounds"].values())
+                    }
+                    st.session_state.game_night_name_set = True
+                    st.rerun()
+
+                if st.button(
+                    "Spielabend löschen",
+                    key=f"delete_history_{game_night_id}"
+                ):
+                    delete_game_night(game_night_id)
+                    st.cache_data.clear()
+                    st.rerun()
+
+                for place, (player, points) in enumerate(sorted_total_points, start=1):
+                    st.write(
+                        f"{place}. {player}: {points} Punkte | Siege: {win_counter[player]}"
+                    )
 
     else:
         st.info("Noch keine alten Spielabende gespeichert.")
