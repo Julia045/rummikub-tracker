@@ -1,8 +1,17 @@
-import sqlite3
+import streamlit as st
+import libsql
+
+
+def get_connection():
+    return libsql.connect(
+        st.secrets["LIBSQL_URL"],
+        auth_token=st.secrets["LIBSQL_AUTH_TOKEN"]
+    )
+
 
 
 def create_tables():
-    connection = sqlite3.connect("rummikub.db")
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute("""
@@ -16,8 +25,7 @@ def create_tables():
     CREATE TABLE IF NOT EXISTS players (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         game_night_id INTEGER,
-        name TEXT,
-        FOREIGN KEY (game_night_id) REFERENCES game_nights(id)
+        name TEXT
     )
     """)
 
@@ -25,8 +33,7 @@ def create_tables():
     CREATE TABLE IF NOT EXISTS rounds (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         game_night_id INTEGER,
-        winner TEXT,
-        FOREIGN KEY (game_night_id) REFERENCES game_nights(id)
+        winner TEXT
     )
     """)
 
@@ -35,8 +42,7 @@ def create_tables():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         round_id INTEGER,
         player_name TEXT,
-        points INTEGER,
-        FOREIGN KEY (round_id) REFERENCES rounds(id)
+        points INTEGER
     )
     """)
 
@@ -45,7 +51,7 @@ def create_tables():
 
 
 def save_game_night(name):
-    connection = sqlite3.connect("rummikub.db")
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(
@@ -53,29 +59,29 @@ def save_game_night(name):
         (name,)
     )
 
-    game_night_id = cursor.lastrowid
+    cursor.execute("SELECT last_insert_rowid()")
+    game_night_id = cursor.fetchone()[0]
 
     connection.commit()
     connection.close()
 
     return game_night_id
 
-def get_game_nights():
 
-    connection = sqlite3.connect("rummikub.db")
+def get_game_nights():
+    connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute("SELECT * FROM game_nights")
-
+    cursor.execute("SELECT id, name FROM game_nights")
     game_nights = cursor.fetchall()
 
     connection.close()
 
     return game_nights
 
-def save_player(game_night_id, player_name):
 
-    connection = sqlite3.connect("rummikub.db")
+def save_player(game_night_id, player_name):
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(
@@ -89,64 +95,9 @@ def save_player(game_night_id, player_name):
     connection.commit()
     connection.close()
 
-def save_round(game_night_id, winner):
-
-    connection = sqlite3.connect("rummikub.db")
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO rounds (game_night_id, winner)
-        VALUES (?, ?)
-        """,
-        (game_night_id, winner)
-    )
-
-    round_id = cursor.lastrowid
-
-    connection.commit()
-    connection.close()
-
-    return round_id
-
-def save_round_points(round_id, player_name, points):
-
-    connection = sqlite3.connect("rummikub.db")
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO round_points (round_id, player_name, points)
-        VALUES (?, ?, ?)
-        """,
-        (round_id, player_name, points)
-    )
-
-    connection.commit()
-    connection.close()
-
-def get_game_night_by_id(game_night_id):
-
-    connection = sqlite3.connect("rummikub.db")
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-        SELECT * FROM game_nights
-        WHERE id = ?
-        """,
-        (game_night_id,)
-    )
-
-    game_night = cursor.fetchone()
-
-    connection.close()
-
-    return game_night
 
 def get_players(game_night_id):
-
-    connection = sqlite3.connect("rummikub.db")
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(
@@ -163,9 +114,30 @@ def get_players(game_night_id):
 
     return players
 
-def get_rounds(game_night_id):
 
-    connection = sqlite3.connect("rummikub.db")
+def save_round(game_night_id, winner):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO rounds (game_night_id, winner)
+        VALUES (?, ?)
+        """,
+        (game_night_id, winner)
+    )
+
+    cursor.execute("SELECT last_insert_rowid()")
+    round_id = cursor.fetchone()[0]
+
+    connection.commit()
+    connection.close()
+
+    return round_id
+
+
+def get_rounds(game_night_id):
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(
@@ -182,9 +154,25 @@ def get_rounds(game_night_id):
 
     return rounds
 
-def get_round_points(round_id):
 
-    connection = sqlite3.connect("rummikub.db")
+def save_round_points(round_id, player_name, points):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO round_points (round_id, player_name, points)
+        VALUES (?, ?, ?)
+        """,
+        (round_id, player_name, points)
+    )
+
+    connection.commit()
+    connection.close()
+
+
+def get_round_points(round_id):
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(
@@ -202,12 +190,18 @@ def get_round_points(round_id):
 
     return round_points
 
+
 def delete_game_night(game_night_id):
-    connection = sqlite3.connect("rummikub.db")
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(
-        "DELETE FROM round_points WHERE round_id IN (SELECT id FROM rounds WHERE game_night_id = ?)",
+        """
+        DELETE FROM round_points
+        WHERE round_id IN (
+            SELECT id FROM rounds WHERE game_night_id = ?
+        )
+        """,
         (game_night_id,)
     )
 
@@ -228,3 +222,32 @@ def delete_game_night(game_night_id):
 
     connection.commit()
     connection.close()
+
+def get_history_data():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            game_nights.id,
+            game_nights.name,
+            players.name,
+            rounds.id,
+            rounds.winner,
+            round_points.player_name,
+            round_points.points
+        FROM game_nights
+        LEFT JOIN players
+            ON players.game_night_id = game_nights.id
+        LEFT JOIN rounds
+            ON rounds.game_night_id = game_nights.id
+        LEFT JOIN round_points
+            ON round_points.round_id = rounds.id
+        ORDER BY game_nights.id, rounds.id
+    """)
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    return rows
