@@ -134,88 +134,96 @@ with tab_setup:
             st.write(f"• {player}")
 
 with tab_spiel:
-    st.subheader("Neue Runde")
 
-    def save_round_app():
+    if not st.session_state.game_night_name_set:
+        st.info("Bitte starte zuerst einen Spielabend.")
 
-        winner = st.session_state.round_winner
+    elif len(st.session_state.game_night["players"]) < 2:
+        st.info("Bitte füge zuerst mindestens 2 Spieler hinzu.")
 
-        round_points = {}
+    else:
+        st.subheader("Neue Runde")
 
-        for player in st.session_state.game_night["players"]:
+        def save_round_app():
 
-            if player == winner:
-                round_points[player] = 0
+            winner = st.session_state.round_winner
 
-            else:
-                round_points[player] = st.session_state[f"points_{player}"]
-        
-        round_id = save_round_to_db(
-        st.session_state.game_night["id"],
-        winner
-    )
+            round_points = {}
 
-        for player, points in round_points.items():
+            for player in st.session_state.game_night["players"]:
 
-            save_round_points(
-                round_id,
-                player,
-                points
-            )
-            st.cache_data.clear()
+                if player == winner:
+                    round_points[player] = 0
 
-        round_data = {
-            "winner": winner,
-            "points": round_points
-        }
-
-        st.session_state.game_night["rounds"].append(round_data)
-
-        for player in st.session_state.game_night["players"]:
-
-            if player != winner:
-                st.session_state[f"points_{player}"] = 0
-
-
-    if len(st.session_state.game_night["players"]) >= 2:
-
-        st.subheader("Runde eintragen")
-
-        winner = st.selectbox(
-            "Wer hat die Runde gewonnen?",
-            st.session_state.game_night["players"],
-            key="round_winner"
+                else:
+                    round_points[player] = st.session_state[f"points_{player}"]
+            
+            round_id = save_round_to_db(
+            st.session_state.game_night["id"],
+            winner
         )
 
-        for player in st.session_state.game_night["players"]:
+            for player, points in round_points.items():
 
-            if player == winner:
-                st.write(f"{player}: 0 Punkte (Gewinner)")
-
-            else:
-                st.number_input(
-                    f"Punkte für {player}",
-                    min_value=0,
-                    step=1,
-                    key=f"points_{player}"
+                save_round_points(
+                    round_id,
+                    player,
+                    points
                 )
+                st.cache_data.clear()
 
-        st.button("Runde speichern", on_click=save_round_app)
+            round_data = {
+                "winner": winner,
+                "points": round_points
+            }
 
-    st.subheader("Gespeicherte Runden")
+            st.session_state.game_night["rounds"].append(round_data)
 
-    for index, round_data in enumerate(st.session_state.game_night["rounds"], start=1):
+            for player in st.session_state.game_night["players"]:
 
-        st.markdown(f"### Runde {index}")
+                if player != winner:
+                    st.session_state[f"points_{player}"] = 0
 
-        st.write(f"🏆 Gewinner: {round_data['winner']}")
 
-        for player, points in round_data["points"].items():
-            st.write(f"• {player}: {points} Punkte")
-        
-        if st.button("Runde löschen", key=f"delete_round_{index}"):
-            st.session_state.game_night["rounds"].pop(index - 1)
-            st.rerun()
+        if len(st.session_state.game_night["players"]) >= 2:
+
+            st.subheader("Runde eintragen")
+
+            winner = st.selectbox(
+                "Wer hat die Runde gewonnen?",
+                st.session_state.game_night["players"],
+                key="round_winner"
+            )
+
+            for player in st.session_state.game_night["players"]:
+
+                if player == winner:
+                    st.write(f"{player}: 0 Punkte (Gewinner)")
+
+                else:
+                    st.number_input(
+                        f"Punkte für {player}",
+                        min_value=0,
+                        step=1,
+                        key=f"points_{player}"
+                    )
+
+            st.button("Runde speichern", on_click=save_round_app)
+
+        st.subheader("Gespeicherte Runden")
+
+        for index, round_data in enumerate(st.session_state.game_night["rounds"], start=1):
+
+            st.markdown(f"### Runde {index}")
+
+            st.write(f"🏆 Gewinner: {round_data['winner']}")
+
+            for player, points in round_data["points"].items():
+                st.write(f"• {player}: {points} Punkte")
+            
+            if st.button("Runde löschen", key=f"delete_round_{index}"):
+                st.session_state.game_night["rounds"].pop(index - 1)
+                st.rerun()
 
 with tab_wertung:
 
