@@ -10,7 +10,8 @@ from database import (
     get_players,
     get_rounds,
     get_round_points,
-    delete_game_night
+    delete_game_night,
+    get_history_data
 )
 
 if "password_correct" not in st.session_state:
@@ -34,7 +35,9 @@ if not st.session_state.password_correct:
     st.stop()
 
 st.title("Rummikub Score Tracker")
-create_tables()
+if "tables_created" not in st.session_state:
+    create_tables()
+    st.session_state.tables_created = True
 
 if "game_night" not in st.session_state:
         st.session_state.game_night = {
@@ -57,25 +60,27 @@ tab_setup, tab_spiel, tab_wertung, tab_historie = st.tabs([
 with tab_setup:
     st.subheader("Neuer Spielabend")
 
-    def save_game_night_name():
-        game_night_id = save_game_night(st.session_state.game_night_name)
-
-        st.session_state.game_night["id"] = game_night_id
-        st.session_state.game_night["name"] = st.session_state.game_night_name
-        st.session_state.game_night_name_set = True
-
     if not st.session_state.game_night_name_set:
 
         with st.form("game_night_form"):
-            st.text_input(
-                "Name des Spielabends",
-                key="game_night_name"
-            )
+            game_night_name = st.text_input("Name des Spielabends")
+            submitted = st.form_submit_button("Spielabend starten")
 
-            st.form_submit_button(
-                "Spielabend starten", 
-                on_click=save_game_night_name
-            )
+        if submitted:
+            if game_night_name:
+                game_night_id = save_game_night(game_night_name)
+
+                st.session_state.game_night = {
+                    "id": game_night_id,
+                    "name": game_night_name,
+                    "players": [],
+                    "rounds": []
+                }
+
+                st.session_state.game_night_name_set = True
+                st.rerun()
+            else:
+                st.warning("Bitte gib einen Namen ein.")
 
     else:
         st.subheader(st.session_state.game_night["name"])
@@ -254,47 +259,71 @@ with tab_wertung:
         st.info("Noch keine Runde gespeichert.")
 
 with tab_historie:
-    with tab_historie:
 
-        st.subheader("Alte Spielabende")
+    st.subheader("Alte Spielabende")
 
-    saved_game_nights = get_game_nights()
+    history_rows = get_history_data()
 
-    if saved_game_nights:
+    history = {}
 
-        for game_night in saved_game_nights:
-            game_night_id = game_night[0]
-            game_night_name = game_night[1]
+    for row in history_rows:
+        game_night_id = row[0]
+        game_night_name = row[1]
+        player_name = row[2]
+        round_id = row[3]
+        winner = row[4]
+        point_player_name = row[5]
+        points = row[6]
 
-            st.markdown(f"### {game_night_name}")
+        if game_night_id not in history:
+            history[game_night_id] = {
+                "name": game_night_name,
+                "players": set(),
+                "rounds": {}
+            }
+
+        if player_name:
+            history[game_night_id]["players"].add(player_name)
+
+        if round_id:
+            if round_id not in history[game_night_id]["rounds"]:
+                history[game_night_id]["rounds"][round_id] = {
+                    "winner": winner,
+                    "points": {}
+                }
+
+            if point_player_name:
+                history[game_night_id]["rounds"][round_id]["points"][point_player_name] = points
+
+    if history:
+
+        for game_night_id, game_night_data in history.items():
+
+            st.markdown(f"### {game_night_data['name']}")
+
             if st.button(
                 "Spielabend löschen",
                 key=f"delete_history_{game_night_id}"
-                ):
+            ):
                 delete_game_night(game_night_id)
                 st.rerun()
-
-            players = get_players(game_night_id)
-            rounds = get_rounds(game_night_id)
 
             total_points = {}
             win_counter = {}
 
-            for player in players:
-                player_name = player[0]
-                total_points[player_name] = 0
-                win_counter[player_name] = 0
+            for player in game_night_data["players"]:
+                total_points[player] = 0
+                win_counter[player] = 0
 
-            for round_data in rounds:
-                round_id = round_data[0]
-                winner = round_data[1]
+            for round_data in game_night_data["rounds"].values():
+                winner = round_data["winner"]
 
-                win_counter[winner] += 1
+                if winner in win_counter:
+                    win_counter[winner] += 1
 
-                round_points = get_round_points(round_id)
-
-                for player_name, points in round_points:
-                    total_points[player_name] += points
+                for player_name, points in round_data["points"].items():
+                    if player_name in total_points:
+                        total_points[player_name] += points
 
             sorted_total_points = sorted(
                 total_points.items(),
@@ -302,11 +331,11 @@ with tab_historie:
             )
 
             for place, (player, points) in enumerate(sorted_total_points, start=1):
-                st.write(f"{place}. {player}: {points} Punkte | Siege: {win_counter[player]}")
+                st.write(
+                    f"{place}. {player}: {points} Punkte | Siege: {win_counter[player]}"
+                )
 
             st.divider()
 
     else:
         st.info("Noch keine alten Spielabende gespeichert.")
-
-
